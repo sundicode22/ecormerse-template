@@ -101,7 +101,7 @@ const CATEGORY_SEEDS: SeedCategory[] = [
 const COLLECTION_SEEDS: SeedCollection[] = [
   {
     name: "New Arrivals",
-    description: "Just dropped — the latest from Saakinun.",
+    description: "Just dropped — the latest from Sundi Buy.",
     image:
       "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80",
   },

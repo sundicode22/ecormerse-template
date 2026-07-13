@@ -11,7 +11,7 @@ import {
 const FAQS = [
   {
     q: "How long does shipping take?",
-    a: "Orders usually leave within 1–2 business days. Local deliveries arrive in 2–5 days; international shipments typically take 5–10 business days depending on customs.",
+    a: "Orders usually leave within 1–2 business days. Local deliveries arrive in 2–5 days. International timing depends on the carrier quote and customs after we confirm shipping with you.",
   },
   {
     q: "What is your return policy?",
@@ -27,7 +27,7 @@ const FAQS = [
   },
   {
     q: "Do you ship internationally?",
-    a: "Yes. International DHL Express is available at checkout. Duties and taxes may apply on arrival depending on your country.",
+    a: "Yes. International shipping is quoted by weight and destination. Request a quote at checkout and we will confirm the rate with you on WhatsApp before payment.",
   },
 ]
 

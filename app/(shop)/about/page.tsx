@@ -6,14 +6,14 @@ export default function AboutPage() {
     <div>
       <ShopPageHeader
         title="About"
-        description="SAAKINUN builds modern essentials where cultural craft and western ease meet."
+        description="Sundi Buy builds modern essentials where cultural craft and western ease meet."
       />
 
       <section className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16 lg:px-8">
         <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-neutral-100">
           <Image
             src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1400&q=80"
-            alt="About SAAKINUN"
+            alt="About Sundi Buy"
             fill
             className="object-cover"
             sizes="(max-width: 1024px) 100vw, 50vw"

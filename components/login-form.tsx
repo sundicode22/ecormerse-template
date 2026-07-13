@@ -98,9 +98,9 @@ export function LoginForm({
       <div className="mb-8 text-center">
         <Link
           href="/"
-          className="text-lg font-semibold tracking-wide text-black capitalize"
+          className="font-display text-2xl font-medium tracking-tight text-black"
         >
-          Saakinun
+          Sundi Buy
         </Link>
       </div>
 

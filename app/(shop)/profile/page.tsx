@@ -21,6 +21,7 @@ import {
   type SavedAddress,
 } from "@/hooks/api/useAddresses"
 import { shippingAddressSchema } from "@/lib/validations/checkout"
+import { paymentMethodLabel } from "@/lib/shop-config"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,7 +72,7 @@ function formatDate(value: string | null) {
 
 function deliveryLabel(type: string) {
   if (type === "pickup") return "Pickup"
-  if (type === "international") return "International delivery"
+  if (type === "international") return "International (quote)"
   if (type === "local") return "Local delivery"
   return type
 }
@@ -342,6 +343,10 @@ function OrderCard({ order }: { order: Order }) {
             {formatDate(order.createdAt)} · {deliveryLabel(order.deliveryType)}
           </p>
           <p className="mt-1 text-sm text-neutral-600">
+            {paymentMethodLabel(order.paymentMethod || "whatsapp")}
+            {order.paymentPhone ? ` · ${order.paymentPhone}` : ""}
+          </p>
+          <p className="mt-1 text-sm text-neutral-600">
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </p>
         </div>
@@ -354,6 +359,25 @@ function OrderCard({ order }: { order: Order }) {
           </p>
         </div>
       </div>
+      {order.items && order.items.length > 0 ? (
+        <ul className="mt-3 space-y-1 border-t border-neutral-200/70 pt-3 text-sm text-neutral-600">
+          {order.items.map((item) => (
+            <li key={item.id}>
+              {item.productSlug ? (
+                <Link
+                  href={`/products/${item.productSlug}`}
+                  className="underline underline-offset-2 hover:text-black"
+                >
+                  {item.productName || `Product #${item.productId}`}
+                </Link>
+              ) : (
+                item.productName || `Product #${item.productId}`
+              )}{" "}
+              ×{item.quantity}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {order.shippingAddress ? (
         <p className="mt-3 pt-3 text-sm text-neutral-600">
           {order.deliveryType === "pickup" ? (

@@ -5,9 +5,9 @@ import { closeDb, db } from "../lib/db"
 import { users } from "../lib/db/schema"
 import { ROLES } from "../lib/auth/roles"
 
-const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || "admin@saakinun.com"
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || "admin@sundibuy.com"
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Admin123!"
-const ADMIN_NAME = process.env.SEED_ADMIN_NAME || "Saakinun Admin"
+const ADMIN_NAME = process.env.SEED_ADMIN_NAME || "Sundi Buy Admin"
 
 async function seedAdmin() {
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12)

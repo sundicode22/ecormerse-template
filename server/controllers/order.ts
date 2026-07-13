@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia"
+import { inArray, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { orders } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { orders, products } from "@/lib/db/schema"
 import { auth } from "@/auth"
 import { requireAdmin } from "@/server/plugins/require-admin"
 
@@ -16,7 +16,14 @@ export const orderController = new Elysia()
         throw new Error("Sign in to place an order")
       }
 
-      const { deliveryType, shippingAddress, items, totalAmount } = body
+      const {
+        deliveryType,
+        shippingAddress,
+        items,
+        totalAmount,
+        paymentMethod,
+        paymentPhone,
+      } = body
       const userId = session.user.id
 
       const normalizedAddress =
@@ -33,16 +40,36 @@ export const orderController = new Elysia()
               phone: shippingAddress.phone,
             }
 
+      const status =
+        paymentMethod === "mtn" || paymentMethod === "orange"
+          ? "awaiting_payment"
+          : "pending"
+
       const [newOrder] = await db
         .insert(orders)
         .values({
           userId,
-          status: "pending",
+          status,
           totalAmount: String(totalAmount),
           deliveryType,
+          paymentMethod,
+          paymentPhone:
+            paymentMethod === "mtn" || paymentMethod === "orange"
+              ? paymentPhone?.trim() || null
+              : null,
           shippingAddress: normalizedAddress,
         })
         .returning()
+
+      const productIds = [...new Set(items.map((item) => item.productId))]
+      const productRows =
+        productIds.length > 0
+          ? await db.query.products.findMany({
+              where: inArray(products.id, productIds),
+              columns: { id: true, name: true, slug: true },
+            })
+          : []
+      const productById = new Map(productRows.map((p) => [p.id, p]))
 
       const { orderItems: orderItemsTable } = await import("@/lib/db/schema")
       await db.insert(orderItemsTable).values(
@@ -53,14 +80,19 @@ export const orderController = new Elysia()
             price: number
             selectedVariations?: Record<string, string> | null
             selectedModifiers?: string[] | null
-          }) => ({
-            orderId: newOrder.id,
-            productId: item.productId,
-            quantity: item.quantity,
-            price: String(item.price),
-            selectedVariations: item.selectedVariations ?? null,
-            selectedModifiers: item.selectedModifiers ?? null,
-          })
+          }) => {
+            const product = productById.get(item.productId)
+            return {
+              orderId: newOrder.id,
+              productId: item.productId,
+              productName: product?.name ?? null,
+              productSlug: product?.slug ?? null,
+              quantity: item.quantity,
+              price: String(item.price),
+              selectedVariations: item.selectedVariations ?? null,
+              selectedModifiers: item.selectedModifiers ?? null,
+            }
+          }
         )
       )
 
@@ -76,12 +108,23 @@ export const orderController = new Elysia()
         )
       }
 
-      return newOrder
+      const withItems = await db.query.orders.findFirst({
+        where: eq(orders.id, newOrder.id),
+        with: { items: true },
+      })
+
+      return withItems ?? newOrder
     },
     {
       body: t.Object({
         deliveryType: t.String(),
         totalAmount: t.Number(),
+        paymentMethod: t.Union([
+          t.Literal("mtn"),
+          t.Literal("orange"),
+          t.Literal("whatsapp"),
+        ]),
+        paymentPhone: t.Optional(t.Nullable(t.String())),
         shippingAddress: t.Optional(
           t.Nullable(
             t.Object({

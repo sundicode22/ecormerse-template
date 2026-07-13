@@ -70,6 +70,7 @@ export function ProductCard({
     addToCart({
       id,
       name,
+      slug,
       price,
       image: primaryImage,
       selectedColor,

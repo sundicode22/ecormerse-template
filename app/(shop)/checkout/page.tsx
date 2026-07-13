@@ -46,32 +46,56 @@ import {
   Add01Icon,
   DeliveryBox01Icon,
   Location01Icon,
+  SmartPhone01Icon,
   Store01Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
+import { getShopPaymentConfig, type PaymentMethod } from "@/lib/shop-config"
 
 const DELIVERY_OPTIONS = [
   {
     type: "pickup" as const,
     label: "Shop pickup",
-    description: "Collect from our flagship store",
+    description: "Collect from our store",
     cost: "Free",
     icon: Store01Icon,
   },
   {
     type: "local" as const,
-    label: "Local DHL",
-    description: "2–5 business days",
+    label: "Local delivery",
+    description: "Fixed rate · 2–5 business days",
     cost: "$10.00",
     icon: DeliveryBox01Icon,
   },
   {
     type: "international" as const,
-    label: "International DHL",
-    description: "5–10 business days",
-    cost: "$35.00",
+    label: "International",
+    description: "Shipping varies by weight — we quote you on WhatsApp",
+    cost: "Quote",
     icon: DeliveryBox01Icon,
+  },
+]
+
+const PAYMENT_OPTIONS: {
+  method: PaymentMethod
+  label: string
+  description: string
+}[] = [
+  {
+    method: "mtn",
+    label: "MTN Mobile Money",
+    description: "Pay with your MTN MoMo number",
+  },
+  {
+    method: "orange",
+    label: "Orange Money",
+    description: "Pay with your Orange Money number",
+  },
+  {
+    method: "whatsapp",
+    label: "Order on WhatsApp",
+    description: "Send order details to the shop to confirm",
   },
 ]
 
@@ -153,6 +177,8 @@ export default function CheckoutPage() {
     reValidateMode: "onChange",
     defaultValues: {
       deliveryType: "pickup",
+      paymentMethod: "mtn",
+      paymentPhone: "",
       shippingAddress: {
         name: "",
         line1: "",
@@ -167,11 +193,20 @@ export default function CheckoutPage() {
   })
 
   const deliveryType = form.watch("deliveryType")
+  const paymentMethod = form.watch("paymentMethod")
+  const paymentConfig = getShopPaymentConfig()
+  const isInternationalQuote = deliveryType === "international"
 
   useEffect(() => {
     if (!session?.user) return
     form.setValue("shippingAddress.name", session.user.name || "")
   }, [session?.user, form])
+
+  // International shipping is quoted by weight — discuss on WhatsApp
+  useEffect(() => {
+    if (!isInternationalQuote) return
+    form.setValue("paymentMethod", "whatsapp", { shouldValidate: true })
+  }, [isInternationalQuote, form])
 
   useEffect(() => {
     if (deliveryType === "pickup") return
@@ -203,10 +238,13 @@ export default function CheckoutPage() {
   const deliveryCost = {
     pickup: 0,
     local: 10,
-    international: 35,
+    international: 0,
   }[deliveryType]
 
   const totalAmount = cartTotal + deliveryCost
+  const visiblePaymentOptions = isInternationalQuote
+    ? PAYMENT_OPTIONS.filter((option) => option.method === "whatsapp")
+    : PAYMENT_OPTIONS
   const serverError = createOrderMutation.error
     ? mutationErrorMessage(
         createOrderMutation.error,
@@ -215,6 +253,9 @@ export default function CheckoutPage() {
     : null
 
   const onSubmit = async (data: CheckoutInput) => {
+    const resolvedPaymentMethod =
+      data.deliveryType === "international" ? "whatsapp" : data.paymentMethod
+
     const orderItems = cart.map((item) => {
       const selectedVariations: Record<string, string> = {}
       if (item.selectedSize) selectedVariations.size = item.selectedSize
@@ -270,12 +311,22 @@ export default function CheckoutPage() {
       {
         deliveryType: data.deliveryType,
         totalAmount,
+        paymentMethod: resolvedPaymentMethod,
+        paymentPhone:
+          resolvedPaymentMethod === "mtn" || resolvedPaymentMethod === "orange"
+            ? data.paymentPhone.trim()
+            : null,
         shippingAddress,
         items: orderItems,
       },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
+          const orderId = response?.data?.id
           clearCart()
+          if (orderId) {
+            router.push(`/checkout/success?orderId=${orderId}`)
+            return
+          }
           router.push("/profile")
         },
       }
@@ -762,6 +813,153 @@ export default function CheckoutPage() {
                   </>
                 )}
               </section>
+
+              {/* Step 3 — Payment */}
+              <section className="rounded-2xl bg-white p-5 sm:p-6">
+                <StepHeading
+                  step={3}
+                  title="Payment"
+                  description={
+                    isInternationalQuote
+                      ? "International shipping is quoted by weight — we will confirm the rate with you on WhatsApp."
+                      : "Pay with Mobile Money or send your order on WhatsApp."
+                  }
+                />
+
+                {isInternationalQuote ? (
+                  <div className="mb-5 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
+                    <p className="font-medium text-black">Shipping quote request</p>
+                    <p className="mt-1">
+                      Your bag total is fixed. International shipping depends on
+                      package weight and destination — submit this request and we
+                      will reply on WhatsApp with the shipping cost before you pay.
+                    </p>
+                  </div>
+                ) : null}
+
+                <FormField
+                  control={form.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="grid gap-3">
+                          {visiblePaymentOptions.map((option) => {
+                            const selected = field.value === option.method
+                            return (
+                              <button
+                                key={option.method}
+                                type="button"
+                                onClick={() => field.onChange(option.method)}
+                                className={cn(
+                                  "relative flex flex-col gap-1 rounded-xl border p-4 text-left transition",
+                                  selected
+                                    ? "border-black bg-neutral-50"
+                                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                                )}
+                              >
+                                {selected ? (
+                                  <span className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-black text-white">
+                                    <HugeiconsIcon
+                                      icon={Tick02Icon}
+                                      strokeWidth={2.5}
+                                      className="size-3"
+                                    />
+                                  </span>
+                                ) : null}
+                                <span className="flex items-center gap-3">
+                                  <span className="flex size-9 items-center justify-center rounded-lg bg-neutral-100 text-neutral-800">
+                                    <HugeiconsIcon
+                                      icon={SmartPhone01Icon}
+                                      strokeWidth={1.8}
+                                      className="size-4"
+                                    />
+                                  </span>
+                                  <span>
+                                    <span className="block text-sm font-semibold text-black">
+                                      {isInternationalQuote
+                                        ? "Request quote on WhatsApp"
+                                        : option.label}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-neutral-500">
+                                      {isInternationalQuote
+                                        ? "We review weight and destination, then confirm shipping"
+                                        : option.description}
+                                    </span>
+                                  </span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {(paymentMethod === "mtn" || paymentMethod === "orange") && (
+                  <div className="mt-5 space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="paymentPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Your{" "}
+                            {paymentMethod === "mtn" ? "MTN MoMo" : "Orange Money"}{" "}
+                            number
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. 6XX XXX XXX"
+                              className="bg-white"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
+                      <p className="font-medium text-black">How it works</p>
+                      <p className="mt-1">
+                        Place the order, then send{" "}
+                        <span className="font-medium text-black">
+                          ${totalAmount.toFixed(2)}
+                        </span>{" "}
+                        to{" "}
+                        <span className="font-medium text-black">
+                          {paymentMethod === "mtn"
+                            ? paymentConfig.mtnMomoNumber || "the shop MTN number"
+                            : paymentConfig.orangeMoneyNumber ||
+                              "the shop Orange number"}
+                        </span>
+                        . You can also notify the shop on WhatsApp with your order
+                        details and product links.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {paymentMethod === "whatsapp" ? (
+                  <div className="mt-5 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
+                    <p className="font-medium text-black">WhatsApp checkout</p>
+                    <p className="mt-1">
+                      After placing the order you will be redirected to WhatsApp
+                      with your items, totals, and product links so the shop can
+                      confirm and arrange payment.
+                    </p>
+                    {!paymentConfig.whatsappNumber ? (
+                      <p className="mt-2 text-red-600">
+                        Shop WhatsApp number is not configured. Set
+                        NEXT_PUBLIC_WHATSAPP_NUMBER in your environment.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
             </div>
 
             {/* Order summary */}
@@ -818,19 +1016,30 @@ export default function CheckoutPage() {
                     <span>
                       {deliveryType === "pickup"
                         ? "Pickup"
-                        : `Shipping (${deliveryType})`}
+                        : deliveryType === "international"
+                          ? "International shipping"
+                          : "Local delivery"}
                     </span>
                     <span>
-                      {deliveryCost > 0
-                        ? `$${deliveryCost.toFixed(2)}`
-                        : "Free"}
+                      {deliveryType === "international"
+                        ? "Quoted later"
+                        : deliveryCost > 0
+                          ? `$${deliveryCost.toFixed(2)}`
+                          : "Free"}
                     </span>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex justify-between text-base font-semibold text-black">
-                    <span>Total</span>
+                    <span>
+                      {isInternationalQuote ? "Items total" : "Total"}
+                    </span>
                     <span>${totalAmount.toFixed(2)}</span>
                   </div>
+                  {isInternationalQuote ? (
+                    <p className="text-xs leading-relaxed text-neutral-500">
+                      Final amount = items + shipping quote (by weight).
+                    </p>
+                  ) : null}
                 </div>
 
                 <Button
@@ -840,12 +1049,17 @@ export default function CheckoutPage() {
                 >
                   {createOrderMutation.isPending
                     ? "Processing…"
-                    : "Place order"}
+                    : isInternationalQuote
+                      ? "Request quote on WhatsApp"
+                      : paymentMethod === "whatsapp"
+                        ? "Place order & open WhatsApp"
+                        : "Place order"}
                 </Button>
 
                 <p className="text-center text-[11px] leading-relaxed text-neutral-500">
-                  By placing your order you agree to our terms of sale and
-                  privacy policy.
+                  {isInternationalQuote
+                    ? "We will confirm international shipping cost with you before payment."
+                    : "Local delivery uses a fixed rate. Mobile Money payments are confirmed by the shop."}
                 </p>
               </div>
             </aside>

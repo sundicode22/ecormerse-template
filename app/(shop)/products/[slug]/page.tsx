@@ -205,6 +205,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       {
         id: activeProduct.id,
         name: activeProduct.name,
+        slug: activeProduct.slug,
         price: unitPrice,
         image: images[0],
         selectedVariations,

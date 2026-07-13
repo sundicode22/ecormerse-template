@@ -8,9 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ColumnDef } from "@tanstack/react-table"
 import type { Order } from "@/hooks/api/useOrders"
 import { formatTableDate } from "@/lib/format-date"
+import { paymentMethodLabel } from "@/lib/shop-config"
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
+  awaiting_payment: "bg-orange-100 text-orange-800",
   paid: "bg-blue-100 text-blue-800",
   processing: "bg-purple-100 text-purple-800",
   shipped: "bg-indigo-100 text-indigo-800",
@@ -20,6 +22,7 @@ const statusColors: Record<string, string> = {
 
 const ORDER_STATUSES = [
   "pending",
+  "awaiting_payment",
   "paid",
   "processing",
   "shipped",
@@ -81,6 +84,57 @@ function OrdersContent() {
       ),
     },
     {
+      accessorKey: "paymentMethod",
+      header: "Payment",
+      cell: ({ row }) => {
+        const method = row.original.paymentMethod || "—"
+        const phone = row.original.paymentPhone
+        return (
+          <div className="text-sm">
+            <span>{paymentMethodLabel(method)}</span>
+            {phone ? (
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {phone}
+              </span>
+            ) : null}
+          </div>
+        )
+      },
+    },
+    {
+      id: "products",
+      header: "Products",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const items = row.original.items || []
+        if (items.length === 0) return <span className="text-sm">—</span>
+        return (
+          <ul className="max-w-[220px] space-y-1 text-xs">
+            {items.slice(0, 3).map((item) => (
+              <li key={item.id} className="truncate">
+                {item.productSlug ? (
+                  <a
+                    href={`/products/${item.productSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-black"
+                  >
+                    {item.productName || `#${item.productId}`}
+                  </a>
+                ) : (
+                  item.productName || `#${item.productId}`
+                )}{" "}
+                ×{item.quantity}
+              </li>
+            ))}
+            {items.length > 3 ? (
+              <li className="text-muted-foreground">+{items.length - 3} more</li>
+            ) : null}
+          </ul>
+        )
+      },
+    },
+    {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
@@ -101,7 +155,7 @@ function OrdersContent() {
           >
             {ORDER_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.replace(/_/g, " ")}
               </option>
             ))}
           </select>
@@ -147,6 +201,7 @@ function OrdersContent() {
           filters={[
             { id: "status", label: "Status" },
             { id: "deliveryType", label: "Delivery" },
+            { id: "paymentMethod", label: "Payment" },
           ]}
         />
       )}

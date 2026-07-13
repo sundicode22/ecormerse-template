@@ -49,8 +49,8 @@ export default function ContactPage() {
           <h2 className="text-2xl">Get in touch</h2>
           <p className="mt-4 text-sm leading-relaxed text-neutral-600">
             Email us at{" "}
-            <a href="mailto:hello@saakinun.com" className="underline underline-offset-4">
-              hello@saakinun.com
+            <a href="mailto:hello@sundibuy.com" className="underline underline-offset-4">
+              hello@sundibuy.com
             </a>{" "}
             or send a note below. We typically reply within 1–2 business days.
           </p>
@@ -59,7 +59,7 @@ export default function ContactPage() {
               <span className="font-medium text-black">Customer care:</span> Mon–Fri, 9am–6pm
             </p>
             <p>
-              <span className="font-medium text-black">Press:</span> press@saakinun.com
+              <span className="font-medium text-black">Press:</span> press@sundibuy.com
             </p>
           </div>
         </div>

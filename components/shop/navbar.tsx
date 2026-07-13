@@ -88,8 +88,8 @@ export function Navbar() {
               className="w-full gap-0 p-0 sm:max-w-sm"
             >
               <SheetHeader className="border-b px-6 py-4">
-                <SheetTitle className="text-left text-sm font-semibold tracking-wide">
-                  Saakinun
+                <SheetTitle className="font-display text-left text-xl font-medium tracking-tight">
+                  Sundi Buy
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 px-3 py-4">
@@ -117,9 +117,9 @@ export function Navbar() {
 
           <Link
             href="/"
-            className="text-sm font-semibold tracking-wide text-black transition-opacity hover:opacity-60"
+            className="font-display text-lg font-medium tracking-tight text-black transition-opacity hover:opacity-60"
           >
-            Saakinun
+            Sundi Buy
           </Link>
         </div>
 

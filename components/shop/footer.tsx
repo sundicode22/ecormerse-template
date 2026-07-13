@@ -34,7 +34,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
-            <p className="text-2xl font-semibold tracking-wide">SAAKINUN</p>
+            <p className="font-display text-3xl font-medium tracking-tight">Sundi Buy</p>
             <p className="max-w-xs text-sm leading-relaxed text-neutral-400">
               Modern essentials designed with care — cultural craft meeting western ease.
             </p>
@@ -70,7 +70,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col gap-4 pt-8 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} SAAKINUN. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Sundi Buy. All rights reserved.</p>
           <div className="flex gap-3 tracking-wide uppercase">
             {["Visa", "Mastercard", "Amex", "PayPal"].map((m) => (
               <span key={m} className="bg-neutral-900 px-2 py-1 text-[10px]">

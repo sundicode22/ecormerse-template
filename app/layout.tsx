@@ -1,17 +1,23 @@
 import type { Metadata } from "next"
-import { Figtree } from "next/font/google"
+import { DM_Sans, Fraunces } from "next/font/google"
 import "./globals.css"
 import { cn } from "@/lib/utils"
 import { Providers } from "./providers"
 
-const sans = Figtree({
+const sans = DM_Sans({
   subsets: ["latin"],
-  variable: "--font-figtree",
+  variable: "--font-dm-sans",
+})
+
+const display = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
 })
 
 export const metadata: Metadata = {
-  title: "SAAKINUN — Modern Essentials",
-  description: "Modern essentials for every body. Premium fashion in black and white.",
+  title: "Sundi Buy — Modern Essentials",
+  description:
+    "Modern essentials for every body. Shop local delivery or request an international quote.",
 }
 
 export default function RootLayout({
@@ -20,7 +26,15 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={cn("h-full antialiased", sans.variable, "font-sans")}>
+    <html
+      lang="en"
+      className={cn(
+        "h-full antialiased",
+        sans.variable,
+        display.variable,
+        "font-sans"
+      )}
+    >
       <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>
       </body>

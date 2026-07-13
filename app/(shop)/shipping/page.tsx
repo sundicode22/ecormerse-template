@@ -5,34 +5,38 @@ export default function ShippingPage() {
     <div>
       <ShopPageHeader
         title="Shipping"
-        description="Straightforward delivery options for local and international orders."
+        description="Local delivery at a fixed rate. International shipping is quoted by weight."
       />
       <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="space-y-10 text-sm leading-relaxed text-neutral-600">
           <section>
-            <h2 className="text-2xl text-black">
-              Standard delivery
-            </h2>
+            <h2 className="text-2xl text-black">Shop pickup</h2>
             <p className="mt-3">
-              Orders typically ship within 1–3 business days. Free standard shipping applies on
-              orders over $100.
+              Collect your order from our store at no extra cost. Bring a valid
+              ID matching the name on the order.
             </p>
           </section>
           <section>
-            <h2 className="text-2xl text-black">
-              Express & international
-            </h2>
+            <h2 className="text-2xl text-black">Local delivery</h2>
             <p className="mt-3">
-              Express options are available at checkout. International delivery times vary by
-              destination and customs processing.
+              Local orders use a fixed delivery fee shown at checkout (currently
+              $10). Most local deliveries arrive within 2–5 business days.
             </p>
           </section>
           <section>
-            <h2 className="text-2xl text-black">
-              Tracking
-            </h2>
+            <h2 className="text-2xl text-black">International shipping</h2>
             <p className="mt-3">
-              Once your order ships, you will receive a confirmation email with tracking details.
+              International rates vary by package weight and destination, so we
+              do not charge a fixed shipping fee online. Submit your order as a
+              quote request and we will confirm shipping cost with you on
+              WhatsApp before you pay.
+            </p>
+          </section>
+          <section>
+            <h2 className="text-2xl text-black">Tracking</h2>
+            <p className="mt-3">
+              Once your order ships, we share tracking details by message or
+              email.
             </p>
           </section>
         </div>

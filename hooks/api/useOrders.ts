@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api-client"
 import { notify } from "@/lib/toast"
 import type { ApiResponse } from "@/types/api"
+import type { PaymentMethod } from "@/lib/shop-config"
 
 export type Order = {
   id: string
@@ -9,6 +10,8 @@ export type Order = {
   status: string
   totalAmount: string
   deliveryType: string
+  paymentMethod: string
+  paymentPhone: string | null
   shippingAddress: {
     name: string
     line1: string
@@ -24,8 +27,12 @@ export type Order = {
   items?: {
     id: number
     productId: number
+    productName?: string | null
+    productSlug?: string | null
     quantity: number
     price: string
+    selectedVariations?: Record<string, string> | null
+    selectedModifiers?: string[] | null
   }[]
 }
 
@@ -90,6 +97,8 @@ export function useCreateOrder() {
     mutationFn: async (orderInput: {
       deliveryType: string
       totalAmount: number
+      paymentMethod: PaymentMethod
+      paymentPhone?: string | null
       shippingAddress?: Order["shippingAddress"]
       items: {
         productId: number
@@ -103,7 +112,7 @@ export function useCreateOrder() {
       try {
         const { data } = await apiClient.post<ApiResponse<Order>>("/orders", orderInput)
         notify.dismiss(toastId)
-        notify.success("Order placed", "Thank you for shopping at SAAKINUN.")
+        notify.success("Order placed", "Thank you for shopping at Sundi Buy.")
         return data
       } catch (error) {
         notify.dismiss(toastId)

@@ -174,10 +174,10 @@ export function LandingPage() {
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/50 to-transparent" />
 
           <div className="relative flex min-h-[72vh] flex-col justify-end px-8 pb-12 pt-24 sm:min-h-[78vh] sm:px-12 sm:pb-16 lg:px-14 lg:pb-20">
-            <p className="animate-fade-up text-sm font-semibold tracking-[0.28em] text-white uppercase sm:text-base">
-              Saakinun
+            <p className="animate-fade-up font-display text-5xl leading-none tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Sundi Buy
             </p>
-            <h1 className="animate-fade-up-delay mt-4 max-w-xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="animate-fade-up-delay mt-5 max-w-xl text-xl font-medium leading-snug text-white/90 sm:text-2xl lg:text-3xl">
               Modern essentials, made to move
             </h1>
             <p className="animate-fade-up-delay-2 mt-5 max-w-md text-sm leading-relaxed text-white/75 sm:text-base">
@@ -486,6 +486,7 @@ export function LandingPage() {
                   addToCart({
                     id: lookProduct.id,
                     name: lookProduct.name,
+                    slug: lookProduct.slug,
                     price: Number(lookProduct.basePrice),
                     image: lookProduct.images?.[0] || "",
                   })

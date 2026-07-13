@@ -238,9 +238,11 @@ export const orders = pgTable("order", {
   userId: text("userId")
     .notNull()
     .references(() => users.id),
-  status: text("status").notNull().default("pending"), // pending, paid, processing, shipped, delivered, cancelled
+  status: text("status").notNull().default("pending"), // pending, awaiting_payment, paid, processing, shipped, delivered, cancelled
   totalAmount: decimal("totalAmount", { precision: 10, scale: 2 }).notNull(),
   deliveryType: text("deliveryType").notNull().default("pickup"), // pickup, local, international
+  paymentMethod: text("paymentMethod").notNull().default("whatsapp"), // mtn, orange, whatsapp
+  paymentPhone: text("paymentPhone"), // customer MTN / Orange number
   shippingAddress: jsonb("shippingAddress").$type<{
     name: string
     line1: string
@@ -263,6 +265,8 @@ export const orderItems = pgTable("orderItem", {
   productId: integer("productId")
     .notNull()
     .references(() => products.id),
+  productName: text("productName"),
+  productSlug: text("productSlug"),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   selectedVariations: jsonb("selectedVariations").$type<
