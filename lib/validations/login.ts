@@ -1,8 +1,7 @@
 import { z } from "zod"
+import { signInSchema } from "@/lib/validations/auth"
 
-export const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
-})
+/** @deprecated Prefer signInSchema from `@/lib/validations/auth` */
+export const loginSchema = signInSchema
 
 export type LoginInput = z.infer<typeof loginSchema>

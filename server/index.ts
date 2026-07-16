@@ -9,6 +9,7 @@ import { presetController } from "./controllers/preset"
 import { reviewController } from "./controllers/review"
 import { userController } from "./controllers/user"
 import { addressController } from "./controllers/address"
+import { authController } from "./controllers/auth"
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -53,6 +54,7 @@ export const app = new Elysia({ prefix: "/api" })
   .use(reviewController)
   .use(userController)
   .use(addressController)
+  .use(authController)
 
 export type App = typeof app
 export type { Product } from "@/hooks/api/useProducts"

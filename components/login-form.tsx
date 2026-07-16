@@ -1,14 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { getSession, signIn } from "next-auth/react"
+import { getSession, signIn, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { isAdmin } from "@/lib/auth/roles"
-import { loginSchema, type LoginInput } from "@/lib/validations/login"
+import {
+  type AuthMode,
+  type RegisterInput,
+  type RecoverInput,
+  type ResetPasswordInput,
+  type SetPasswordInput,
+  type SignInInput,
+  registerSchema,
+  recoverSchema,
+  resetPasswordSchema,
+  setPasswordSchema,
+  signInSchema,
+} from "@/lib/validations/auth"
+import {
+  apiErrorMessage,
+  useAccountStatus,
+  useAuthMe,
+  useForgotPassword,
+  useRegister,
+  useResetPassword,
+  useSetPassword,
+} from "@/hooks/api/useAuth"
 import { notify } from "@/lib/toast"
 import {
   Form,
@@ -25,24 +46,78 @@ import { ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons"
 
 const fieldClass =
   "h-11 rounded-md border-neutral-200 bg-neutral-50 px-4 focus-visible:border-black focus-visible:ring-black/10"
-const buttonClass = "h-11 w-full rounded-md text-sm font-medium capitalize"
+const buttonClass = "h-11 w-full rounded-md text-sm font-medium"
+
+const MODE_COPY: Record<
+  AuthMode,
+  { title: string; subtitle: string }
+> = {
+  signin: {
+    title: "Welcome back",
+    subtitle: "Sign in to continue shopping",
+  },
+  register: {
+    title: "Create your account",
+    subtitle: "Join Sundi Buy with email or Google",
+  },
+  recover: {
+    title: "Reset your password",
+    subtitle: "We will prepare a secure reset link for your account",
+  },
+  reset: {
+    title: "Choose a new password",
+    subtitle: "Enter a new password for your account",
+  },
+  link: {
+    title: "Link email login",
+    subtitle: "Add or update a password so you can sign in without Google",
+  },
+}
+
+type AuthFormProps = React.ComponentProps<"div"> & {
+  callbackUrl?: string
+  initialMode?: AuthMode
+  resetEmail?: string
+  resetToken?: string
+}
 
 export function LoginForm({
   className,
   callbackUrl,
+  initialMode = "signin",
+  resetEmail = "",
+  resetToken = "",
   ...props
-}: React.ComponentProps<"div"> & { callbackUrl?: string }) {
+}: AuthFormProps) {
   const router = useRouter()
+  const { status } = useSession()
+  const [mode, setMode] = useState<AuthMode>(initialMode)
   const [showPassword, setShowPassword] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [infoMessage, setInfoMessage] = useState<string | null>(null)
+  const [resetLink, setResetLink] = useState<string | null>(null)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    mode: "onSubmit",
-    reValidateMode: "onChange",
-    defaultValues: { email: "", password: "" },
-  })
+  const registerMutation = useRegister()
+  const accountStatus = useAccountStatus()
+  const forgotPassword = useForgotPassword()
+  const resetPassword = useResetPassword()
+  const setPassword = useSetPassword()
+  const { data: me } = useAuthMe(status === "authenticated" && mode === "link")
+
+  useEffect(() => {
+    setMode(initialMode)
+  }, [initialMode])
+
+  useEffect(() => {
+    if (mode === "link" && status === "unauthenticated") {
+      setMode("signin")
+      setInfoMessage("Sign in first, then you can set a password for email login.")
+    }
+  }, [mode, status])
+
+  const copy = MODE_COPY[mode]
+  const hasExistingPassword = me?.hasPassword ?? false
 
   function resolveDestination(role?: string | null) {
     if (callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")) {
@@ -51,31 +126,11 @@ export function LoginForm({
     return isAdmin(role) ? "/dashboard" : "/profile"
   }
 
-  async function onSubmit(data: LoginInput) {
+  function switchMode(next: AuthMode) {
     setServerError(null)
-    const toastId = notify.loading("Signing in…")
-    try {
-      const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      })
-      if (result?.error) {
-        notify.dismiss(toastId)
-        setServerError("Invalid email or password")
-        notify.error("Invalid email or password")
-        return
-      }
-      const session = await getSession()
-      notify.dismiss(toastId)
-      notify.success("Signed in")
-      router.push(resolveDestination(session?.user?.role))
-      router.refresh()
-    } catch {
-      notify.dismiss(toastId)
-      setServerError("Something went wrong. Please try again.")
-      notify.error("Something went wrong. Please try again.")
-    }
+    setResetLink(null)
+    setShowPassword(false)
+    setMode(next)
   }
 
   async function handleGoogle() {
@@ -109,122 +164,175 @@ export function LoginForm({
         style={{ borderRadius: 16 }}
       >
         <div className="px-8 py-8 sm:px-10 sm:py-10">
+          {(mode === "signin" || mode === "register") && (
+            <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setInfoMessage(null)
+                  switchMode("signin")
+                }}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition",
+                  mode === "signin"
+                    ? "bg-white text-black shadow-sm"
+                    : "text-neutral-500 hover:text-black"
+                )}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInfoMessage(null)
+                  switchMode("register")
+                }}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition",
+                  mode === "register"
+                    ? "bg-white text-black shadow-sm"
+                    : "text-neutral-500 hover:text-black"
+                )}
+              >
+                Create account
+              </button>
+            </div>
+          )}
+
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-black">
-              Welcome back
+              {copy.title}
             </h1>
-            <p className="mt-2 text-sm text-neutral-500">
-              Sign in to continue shopping
-            </p>
+            <p className="mt-2 text-sm text-neutral-500">{copy.subtitle}</p>
           </div>
 
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-5"
-              noValidate
-            >
-              {serverError && (
-                <p
-                  className="bg-red-50 px-4 py-3 text-center text-sm text-red-600"
-                  style={{ borderRadius: 12 }}
-                >
-                  {serverError}
-                </p>
-              )}
+          {serverError ? (
+            <p className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+              {serverError}
+            </p>
+          ) : null}
+          {infoMessage ? (
+            <p className="mb-5 rounded-xl bg-neutral-50 px-4 py-3 text-center text-sm text-neutral-700">
+              {infoMessage}
+            </p>
+          ) : null}
+          {resetLink ? (
+            <div className="mb-5 rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+              <p className="font-medium text-black">Reset link ready</p>
+              <a
+                href={resetLink}
+                className="mt-2 block break-all underline underline-offset-2"
+              >
+                {resetLink}
+              </a>
+            </div>
+          ) : null}
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="capitalize text-neutral-700">Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                        className={fieldClass}
-                        style={{ borderRadius: 12 }}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {mode === "signin" ? (
+            <SignInFields
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              onForgot={() => switchMode("recover")}
+              onError={setServerError}
+              onInfo={setInfoMessage}
+              resolveDestination={resolveDestination}
+              accountStatus={accountStatus}
+            />
+          ) : null}
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="capitalize text-neutral-700">
-                      Password
-                    </FormLabel>
-                    <div className="relative">
-                      <FormControl>
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          autoComplete="current-password"
-                          className={cn(fieldClass, "pr-11")}
-                          style={{ borderRadius: 12 }}
-                          {...field}
-                        />
-                      </FormControl>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute top-1/2 right-3 -translate-y-1/2 p-1 text-neutral-400 transition-colors hover:text-black"
-                        style={{ borderRadius: 8 }}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        <HugeiconsIcon
-                          icon={showPassword ? ViewOffIcon : ViewIcon}
-                          strokeWidth={1.8}
-                          className="size-5"
-                        />
-                      </button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {mode === "register" ? (
+            <RegisterFields
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              onError={setServerError}
+              onSuccess={() => {
+                switchMode("signin")
+                setInfoMessage("Account created. Sign in with your email.")
+              }}
+              registerMutation={registerMutation}
+            />
+          ) : null}
+
+          {mode === "recover" ? (
+            <RecoverFields
+              onError={setServerError}
+              onBack={() => switchMode("signin")}
+              forgotPassword={forgotPassword}
+              onResetLink={(url) => {
+                setResetLink(url)
+                setInfoMessage(
+                  "If this email has a password, use the reset link below."
+                )
+              }}
+            />
+          ) : null}
+
+          {mode === "reset" ? (
+            <ResetFields
+              email={resetEmail}
+              token={resetToken}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              onError={setServerError}
+              resetPassword={resetPassword}
+              onSuccess={() => {
+                switchMode("signin")
+                setInfoMessage("Password updated. Sign in with your new password.")
+              }}
+            />
+          ) : null}
+
+          {mode === "link" ? (
+            <LinkPasswordFields
+              hasExistingPassword={hasExistingPassword}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              setPassword={setPassword}
+              onError={setServerError}
+              onSuccess={(message) => {
+                setInfoMessage(message)
+              }}
+            />
+          ) : null}
+
+          {(mode === "signin" || mode === "register") && (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-neutral-100" />
+                <span className="text-xs text-neutral-400">Or</span>
+                <div className="h-px flex-1 bg-neutral-100" />
+              </div>
 
               <Button
-                type="submit"
-                className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
-                style={{ borderRadius: 12 }}
-                disabled={form.formState.isSubmitting}
+                variant="outline"
+                type="button"
+                className={cn(
+                  buttonClass,
+                  "border-neutral-200 bg-white hover:bg-neutral-50"
+                )}
+                onClick={handleGoogle}
+                disabled={isGoogleLoading}
               >
-                {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+                <GoogleIcon />
+                {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
               </Button>
-            </form>
-          </Form>
 
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-neutral-100" />
-            <span className="text-xs capitalize text-neutral-400">Or</span>
-            <div className="h-px flex-1 bg-neutral-100" />
-          </div>
+              <p className="mt-4 text-center text-xs text-neutral-500">
+                Google sign-in links to an existing email account automatically.
+                After Google, you can set a password to enable email login.
+              </p>
+            </>
+          )}
 
-          <Button
-            variant="outline"
-            type="button"
-            className={cn(buttonClass, "border-neutral-200 bg-white hover:bg-neutral-50")}
-            style={{ borderRadius: 12 }}
-            onClick={handleGoogle}
-            disabled={isGoogleLoading}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-4">
-              <path
-                d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                fill="currentColor"
-              />
-            </svg>
-            {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
-          </Button>
+          {mode === "link" ? (
+            <button
+              type="button"
+              onClick={() => router.push("/profile")}
+              className="mt-5 w-full text-center text-sm text-neutral-500 underline-offset-4 hover:text-black hover:underline"
+            >
+              Back to profile
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -232,5 +340,647 @@ export function LoginForm({
         By continuing, you agree to our Terms of Service and Privacy Policy.
       </p>
     </div>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-4">
+      <path
+        d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function PasswordToggle({
+  show,
+  onToggle,
+}: {
+  show: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="absolute top-1/2 right-3 -translate-y-1/2 p-1 text-neutral-400 transition-colors hover:text-black"
+      aria-label={show ? "Hide password" : "Show password"}
+    >
+      <HugeiconsIcon
+        icon={show ? ViewOffIcon : ViewIcon}
+        strokeWidth={1.8}
+        className="size-5"
+      />
+    </button>
+  )
+}
+
+function SignInFields({
+  showPassword,
+  setShowPassword,
+  onForgot,
+  onError,
+  onInfo,
+  resolveDestination,
+  accountStatus,
+}: {
+  showPassword: boolean
+  setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
+  onForgot: () => void
+  onError: (v: string | null) => void
+  onInfo: (v: string | null) => void
+  resolveDestination: (role?: string | null) => string
+  accountStatus: ReturnType<typeof useAccountStatus>
+}) {
+  const router = useRouter()
+  const form = useForm<SignInInput>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: { email: "", password: "" },
+  })
+
+  async function onSubmit(data: SignInInput) {
+    onError(null)
+    onInfo(null)
+    const toastId = notify.loading("Signing in…")
+    try {
+      const result = await signIn("credentials", {
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        redirect: false,
+      })
+      if (result?.error) {
+        notify.dismiss(toastId)
+        try {
+          const status = await accountStatus.mutateAsync(
+            data.email.trim().toLowerCase()
+          )
+          if (status.exists && !status.hasPassword && status.hasGoogle) {
+            const message =
+              "This account uses Google. Continue with Google, then set a password to enable email login."
+            onError(message)
+            notify.error(message)
+            return
+          }
+        } catch {
+          // fall through to generic error
+        }
+        onError("Invalid email or password")
+        notify.error("Invalid email or password")
+        return
+      }
+      const session = await getSession()
+      notify.dismiss(toastId)
+      notify.success("Signed in")
+      router.push(resolveDestination(session?.user?.role))
+      router.refresh()
+    } catch {
+      notify.dismiss(toastId)
+      onError("Something went wrong. Please try again.")
+      notify.error("Something went wrong. Please try again.")
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Email</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center justify-between gap-3">
+                <FormLabel className="text-neutral-700">Password</FormLabel>
+                <button
+                  type="button"
+                  onClick={onForgot}
+                  className="text-xs text-neutral-500 underline-offset-4 hover:text-black hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className={cn(fieldClass, "pr-11")}
+                    {...field}
+                  />
+                </FormControl>
+                <PasswordToggle
+                  show={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                />
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+
+function RegisterFields({
+  showPassword,
+  setShowPassword,
+  onError,
+  onSuccess,
+  registerMutation,
+}: {
+  showPassword: boolean
+  setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
+  onError: (v: string | null) => void
+  onSuccess: () => void
+  registerMutation: ReturnType<typeof useRegister>
+}) {
+  const form = useForm<RegisterInput>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  })
+
+  async function onSubmit(data: RegisterInput) {
+    onError(null)
+    const toastId = notify.loading("Creating account…")
+    try {
+      await registerMutation.mutateAsync({
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+      })
+      notify.dismiss(toastId)
+      notify.success("Account created")
+      onSuccess()
+    } catch (error) {
+      notify.dismiss(toastId)
+      const message = apiErrorMessage(error, "Could not create account")
+      onError(message)
+      notify.error(message)
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Name</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Your name"
+                  autoComplete="name"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Email</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Password</FormLabel>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                    className={cn(fieldClass, "pr-11")}
+                    {...field}
+                  />
+                </FormControl>
+                <PasswordToggle
+                  show={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                />
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Confirm password</FormLabel>
+              <FormControl>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Repeat password"
+                  autoComplete="new-password"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
+          disabled={form.formState.isSubmitting || registerMutation.isPending}
+        >
+          {registerMutation.isPending ? "Creating…" : "Create account"}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+
+function RecoverFields({
+  onError,
+  onBack,
+  forgotPassword,
+  onResetLink,
+}: {
+  onError: (v: string | null) => void
+  onBack: () => void
+  forgotPassword: ReturnType<typeof useForgotPassword>
+  onResetLink: (url: string | null) => void
+}) {
+  const form = useForm<RecoverInput>({
+    resolver: zodResolver(recoverSchema),
+    defaultValues: { email: "" },
+  })
+
+  async function onSubmit(data: RecoverInput) {
+    onError(null)
+    onResetLink(null)
+    const toastId = notify.loading("Preparing reset link…")
+    try {
+      const result = await forgotPassword.mutateAsync(
+        data.email.trim().toLowerCase()
+      )
+      notify.dismiss(toastId)
+      notify.success("Check your reset options")
+      onResetLink(result.resetUrl)
+    } catch (error) {
+      notify.dismiss(toastId)
+      const message = apiErrorMessage(error, "Could not start password reset")
+      onError(message)
+      notify.error(message)
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Email</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
+          disabled={form.formState.isSubmitting || forgotPassword.isPending}
+        >
+          {forgotPassword.isPending ? "Sending…" : "Continue"}
+        </Button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-full text-center text-sm text-neutral-500 underline-offset-4 hover:text-black hover:underline"
+        >
+          Back to sign in
+        </button>
+      </form>
+    </Form>
+  )
+}
+
+function ResetFields({
+  email,
+  token,
+  showPassword,
+  setShowPassword,
+  onError,
+  resetPassword,
+  onSuccess,
+}: {
+  email: string
+  token: string
+  showPassword: boolean
+  setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
+  onError: (v: string | null) => void
+  resetPassword: ReturnType<typeof useResetPassword>
+  onSuccess: () => void
+}) {
+  const form = useForm<ResetPasswordInput>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      email,
+      token,
+      password: "",
+      confirmPassword: "",
+    },
+  })
+
+  useEffect(() => {
+    form.setValue("email", email)
+    form.setValue("token", token)
+  }, [email, token, form])
+
+  const missingLink = useMemo(() => !email || !token, [email, token])
+
+  async function onSubmit(data: ResetPasswordInput) {
+    onError(null)
+    const toastId = notify.loading("Updating password…")
+    try {
+      await resetPassword.mutateAsync({
+        email: data.email.trim().toLowerCase(),
+        token: data.token,
+        password: data.password,
+      })
+      notify.dismiss(toastId)
+      notify.success("Password updated")
+      onSuccess()
+    } catch (error) {
+      notify.dismiss(toastId)
+      const message = apiErrorMessage(error, "Could not reset password")
+      onError(message)
+      notify.error(message)
+    }
+  }
+
+  if (missingLink) {
+    return (
+      <p className="text-center text-sm text-neutral-600">
+        This reset link is incomplete. Request a new one from “Forgot password?”.
+      </p>
+    )
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Email</FormLabel>
+              <FormControl>
+                <Input type="email" className={fieldClass} readOnly {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">New password</FormLabel>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={cn(fieldClass, "pr-11")}
+                    {...field}
+                  />
+                </FormControl>
+                <PasswordToggle
+                  show={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                />
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Confirm password</FormLabel>
+              <FormControl>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
+          disabled={form.formState.isSubmitting || resetPassword.isPending}
+        >
+          {resetPassword.isPending ? "Updating…" : "Update password"}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+
+function LinkPasswordFields({
+  hasExistingPassword,
+  showPassword,
+  setShowPassword,
+  setPassword,
+  onError,
+  onSuccess,
+}: {
+  hasExistingPassword: boolean
+  showPassword: boolean
+  setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
+  setPassword: ReturnType<typeof useSetPassword>
+  onError: (v: string | null) => void
+  onSuccess: (message: string) => void
+}) {
+  const form = useForm<SetPasswordInput>({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: {
+      currentPassword: "",
+      password: "",
+      confirmPassword: "",
+    },
+  })
+
+  async function onSubmit(data: SetPasswordInput) {
+    onError(null)
+    try {
+      const result = await setPassword.mutateAsync({
+        currentPassword: hasExistingPassword
+          ? data.currentPassword
+          : undefined,
+        password: data.password,
+      })
+      form.reset()
+      onSuccess(result.message)
+    } catch (error) {
+      onError(apiErrorMessage(error, "Could not save password"))
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {hasExistingPassword ? (
+          <FormField
+            control={form.control}
+            name="currentPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-neutral-700">Current password</FormLabel>
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    className={fieldClass}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : (
+          <p className="rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-600">
+            You signed in with Google. Set a password to also use email login on
+            this account.
+          </p>
+        )}
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">
+                {hasExistingPassword ? "New password" : "Password"}
+              </FormLabel>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={cn(fieldClass, "pr-11")}
+                    {...field}
+                  />
+                </FormControl>
+                <PasswordToggle
+                  show={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                />
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-neutral-700">Confirm password</FormLabel>
+              <FormControl>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={fieldClass}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
+          disabled={form.formState.isSubmitting || setPassword.isPending}
+        >
+          {setPassword.isPending
+            ? "Saving…"
+            : hasExistingPassword
+              ? "Update password"
+              : "Set password & link login"}
+        </Button>
+      </form>
+    </Form>
   )
 }

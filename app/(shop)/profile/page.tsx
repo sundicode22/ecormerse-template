@@ -20,6 +20,7 @@ import {
   useDeleteAddress,
   type SavedAddress,
 } from "@/hooks/api/useAddresses"
+import { useAuthMe } from "@/hooks/api/useAuth"
 import { shippingAddressSchema } from "@/lib/validations/checkout"
 import { paymentMethodLabel } from "@/lib/shop-config"
 import { cn } from "@/lib/utils"
@@ -682,6 +683,8 @@ function PersonalPanel({
   name: string
   email?: string | null
 }) {
+  const { data: me, isLoading } = useAuthMe(true)
+
   return (
     <div className="mt-6 space-y-6">
       <div>
@@ -689,7 +692,8 @@ function PersonalPanel({
           Personal details
         </h2>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-neutral-600">
-          These details come from your sign-in account.
+          These details come from your sign-in account. Link email login if you
+          signed in with Google.
         </p>
       </div>
       <dl className="grid gap-4 sm:grid-cols-2">
@@ -708,6 +712,40 @@ function PersonalPanel({
           </dd>
         </div>
       </dl>
+
+      <div className="rounded-xl bg-neutral-50 p-4 sm:p-5">
+        <p className="text-sm font-semibold text-black">Sign-in methods</p>
+        {isLoading ? (
+          <p className="mt-2 text-sm text-neutral-500">Loading…</p>
+        ) : (
+          <ul className="mt-3 space-y-1 text-sm text-neutral-600">
+            <li>
+              Email & password:{" "}
+              <span className="font-medium text-black">
+                {me?.hasPassword ? "Enabled" : "Not set"}
+              </span>
+            </li>
+            <li>
+              Google:{" "}
+              <span className="font-medium text-black">
+                {me?.hasGoogle ? "Connected" : "Not connected"}
+              </span>
+            </li>
+          </ul>
+        )}
+        <Link
+          href="/login?mode=link"
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-md bg-black px-5 text-sm font-medium text-white transition hover:bg-neutral-800"
+        >
+          {me?.hasPassword ? "Change password" : "Set password & link email login"}
+        </Link>
+        {me?.hasGoogle && !me?.hasPassword ? (
+          <p className="mt-3 text-xs leading-relaxed text-neutral-500">
+            You currently sign in with Google only. Setting a password links
+            email login to the same account.
+          </p>
+        ) : null}
+      </div>
     </div>
   )
 }
