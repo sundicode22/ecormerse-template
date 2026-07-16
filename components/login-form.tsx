@@ -10,12 +10,10 @@ import { cn } from "@/lib/utils"
 import { isAdmin } from "@/lib/auth/roles"
 import {
   type AuthMode,
-  type RegisterInput,
   type RecoverInput,
   type ResetPasswordInput,
   type SetPasswordInput,
   type SignInInput,
-  registerSchema,
   recoverSchema,
   resetPasswordSchema,
   setPasswordSchema,
@@ -53,12 +51,12 @@ const MODE_COPY: Record<
   { title: string; subtitle: string }
 > = {
   signin: {
-    title: "Welcome back",
-    subtitle: "Sign in to continue shopping",
+    title: "Continue",
+    subtitle: "Enter your email to sign in — new emails get an account automatically",
   },
   register: {
-    title: "Create your account",
-    subtitle: "Join Sundi Buy with email or Google",
+    title: "Continue",
+    subtitle: "Enter your email to sign in — new emails get an account automatically",
   },
   recover: {
     title: "Reset your password",
@@ -164,41 +162,6 @@ export function LoginForm({
         style={{ borderRadius: 16 }}
       >
         <div className="px-8 py-8 sm:px-10 sm:py-10">
-          {(mode === "signin" || mode === "register") && (
-            <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setInfoMessage(null)
-                  switchMode("signin")
-                }}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm font-medium transition",
-                  mode === "signin"
-                    ? "bg-white text-black shadow-sm"
-                    : "text-neutral-500 hover:text-black"
-                )}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInfoMessage(null)
-                  switchMode("register")
-                }}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm font-medium transition",
-                  mode === "register"
-                    ? "bg-white text-black shadow-sm"
-                    : "text-neutral-500 hover:text-black"
-                )}
-              >
-                Create account
-              </button>
-            </div>
-          )}
-
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-black">
               {copy.title}
@@ -228,8 +191,8 @@ export function LoginForm({
             </div>
           ) : null}
 
-          {mode === "signin" ? (
-            <SignInFields
+          {mode === "signin" || mode === "register" ? (
+            <ContinueFields
               showPassword={showPassword}
               setShowPassword={setShowPassword}
               onForgot={() => switchMode("recover")}
@@ -237,18 +200,6 @@ export function LoginForm({
               onInfo={setInfoMessage}
               resolveDestination={resolveDestination}
               accountStatus={accountStatus}
-            />
-          ) : null}
-
-          {mode === "register" ? (
-            <RegisterFields
-              showPassword={showPassword}
-              setShowPassword={setShowPassword}
-              onError={setServerError}
-              onSuccess={() => {
-                switchMode("signin")
-                setInfoMessage("Account created. Sign in with your email.")
-              }}
               registerMutation={registerMutation}
             />
           ) : null}
@@ -295,7 +246,7 @@ export function LoginForm({
             />
           ) : null}
 
-          {(mode === "signin" || mode === "register") && (
+          {mode === "signin" || mode === "register" ? (
             <>
               <div className="my-6 flex items-center gap-3">
                 <div className="h-px flex-1 bg-neutral-100" />
@@ -322,7 +273,7 @@ export function LoginForm({
                 After Google, you can set a password to enable email login.
               </p>
             </>
-          )}
+          ) : null}
 
           {mode === "link" ? (
             <button
@@ -377,7 +328,16 @@ function PasswordToggle({
   )
 }
 
-function SignInFields({
+function deriveName(email: string) {
+  const local = email.split("@")[0] ?? ""
+  const cleaned = local.replace(/[._-]+/g, " ").trim()
+  if (cleaned.length >= 2) {
+    return cleaned.replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+  return "Customer"
+}
+
+function ContinueFields({
   showPassword,
   setShowPassword,
   onForgot,
@@ -385,6 +345,7 @@ function SignInFields({
   onInfo,
   resolveDestination,
   accountStatus,
+  registerMutation,
 }: {
   showPassword: boolean
   setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
@@ -393,6 +354,7 @@ function SignInFields({
   onInfo: (v: string | null) => void
   resolveDestination: (role?: string | null) => string
   accountStatus: ReturnType<typeof useAccountStatus>
+  registerMutation: ReturnType<typeof useRegister>
 }) {
   const router = useRouter()
   const form = useForm<SignInInput>({
@@ -400,41 +362,77 @@ function SignInFields({
     defaultValues: { email: "", password: "" },
   })
 
+  async function completeSignIn(
+    email: string,
+    password: string,
+    toastId: string | number
+  ) {
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    })
+    if (result?.error) {
+      notify.dismiss(toastId)
+      onError("Invalid email or password")
+      notify.error("Invalid email or password")
+      return
+    }
+    const session = await getSession()
+    notify.dismiss(toastId)
+    notify.success("Signed in")
+    router.push(resolveDestination(session?.user?.role))
+    router.refresh()
+  }
+
   async function onSubmit(data: SignInInput) {
     onError(null)
     onInfo(null)
-    const toastId = notify.loading("Signing in…")
+    const email = data.email.trim().toLowerCase()
+    const password = data.password
+    const toastId = notify.loading("Continuing…")
+
     try {
-      const result = await signIn("credentials", {
-        email: data.email.trim().toLowerCase(),
-        password: data.password,
-        redirect: false,
-      })
-      if (result?.error) {
-        notify.dismiss(toastId)
-        try {
-          const status = await accountStatus.mutateAsync(
-            data.email.trim().toLowerCase()
-          )
-          if (status.exists && !status.hasPassword && status.hasGoogle) {
-            const message =
-              "This account uses Google. Continue with Google, then set a password to enable email login."
-            onError(message)
-            notify.error(message)
-            return
-          }
-        } catch {
-          // fall through to generic error
+      const status = await accountStatus.mutateAsync(email)
+
+      if (!status.exists) {
+        if (password.length < 8) {
+          notify.dismiss(toastId)
+          const message =
+            "New here — choose a password with at least 8 characters to create your account."
+          onError(message)
+          notify.error(message)
+          return
         }
-        onError("Invalid email or password")
-        notify.error("Invalid email or password")
+        notify.dismiss(toastId)
+        const createToast = notify.loading("Creating your account…")
+        try {
+          await registerMutation.mutateAsync({
+            name: deriveName(email),
+            email,
+            password,
+          })
+        } catch (error) {
+          notify.dismiss(createToast)
+          const message = apiErrorMessage(error, "Could not create account")
+          onError(message)
+          notify.error(message)
+          return
+        }
+        await completeSignIn(email, password, createToast)
         return
       }
-      const session = await getSession()
-      notify.dismiss(toastId)
-      notify.success("Signed in")
-      router.push(resolveDestination(session?.user?.role))
-      router.refresh()
+
+      if (!status.hasPassword && status.hasGoogle) {
+        notify.dismiss(toastId)
+        const message =
+          "This account uses Google. Continue with Google, then set a password to enable email login."
+        onError(message)
+        notify.error(message)
+        return
+      }
+
+      await completeSignIn(email, password, toastId)
     } catch {
       notify.dismiss(toastId)
       onError("Something went wrong. Please try again.")
@@ -501,148 +499,17 @@ function SignInFields({
         <Button
           type="submit"
           className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
-          disabled={form.formState.isSubmitting}
+          disabled={
+            form.formState.isSubmitting ||
+            accountStatus.isPending ||
+            registerMutation.isPending
+          }
         >
-          {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
-    </Form>
-  )
-}
-
-function RegisterFields({
-  showPassword,
-  setShowPassword,
-  onError,
-  onSuccess,
-  registerMutation,
-}: {
-  showPassword: boolean
-  setShowPassword: (v: boolean | ((p: boolean) => boolean)) => void
-  onError: (v: string | null) => void
-  onSuccess: () => void
-  registerMutation: ReturnType<typeof useRegister>
-}) {
-  const form = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
-  })
-
-  async function onSubmit(data: RegisterInput) {
-    onError(null)
-    const toastId = notify.loading("Creating account…")
-    try {
-      await registerMutation.mutateAsync({
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        password: data.password,
-      })
-      notify.dismiss(toastId)
-      notify.success("Account created")
-      onSuccess()
-    } catch (error) {
-      notify.dismiss(toastId)
-      const message = apiErrorMessage(error, "Could not create account")
-      onError(message)
-      notify.error(message)
-    }
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-neutral-700">Name</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Your name"
-                  autoComplete="name"
-                  className={fieldClass}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-neutral-700">Email</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  className={fieldClass}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-neutral-700">Password</FormLabel>
-              <div className="relative">
-                <FormControl>
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="At least 8 characters"
-                    autoComplete="new-password"
-                    className={cn(fieldClass, "pr-11")}
-                    {...field}
-                  />
-                </FormControl>
-                <PasswordToggle
-                  show={showPassword}
-                  onToggle={() => setShowPassword((v) => !v)}
-                />
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="confirmPassword"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-neutral-700">Confirm password</FormLabel>
-              <FormControl>
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Repeat password"
-                  autoComplete="new-password"
-                  className={fieldClass}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button
-          type="submit"
-          className={cn(buttonClass, "bg-black text-white hover:bg-neutral-800")}
-          disabled={form.formState.isSubmitting || registerMutation.isPending}
-        >
-          {registerMutation.isPending ? "Creating…" : "Create account"}
+          {form.formState.isSubmitting ||
+          accountStatus.isPending ||
+          registerMutation.isPending
+            ? "Continuing…"
+            : "Continue"}
         </Button>
       </form>
     </Form>
